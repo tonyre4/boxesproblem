@@ -126,15 +126,7 @@ class entity2D:
                     else:
                         boxtofill = newbox2
                     self.setBox([l,w],idd,bxs.idxBox(idd),boxtofill)
-
-        print(height,"\n",np.flip(newbox2,0))
-        print("\n\n",np.flip(newbox1,0))
-        print("\n\n",np.flip(newbox1+newbox2,0))
-        exit()
-
-
-        self.printbox()
-        return np.copy(self.box[:int(self.box.shape[0]/2),:]), np.copy(self.box[int(self.box.shape[0]/2):,:])
+        return newbox1,newbox2
 
     def itBoxCut(self,coords,box,boxpart):
         lo,wo = coords #origin coords
@@ -206,53 +198,37 @@ def rulet(pond):
         #print("idx:",idx)
     return idx
 
+def crossMatrix(p1,p2,p3,p4):
+    newmat1 = p1
+    newmat2 = p3
+
+    return newmat1,newmat2
+
+
 def crossParents(p1,p2):
     global b2 
     h = np.random.randint(1,p1.box.shape[0])
     part1,part2 = p1.cutBox(b2,h)
     part3,part4 = p2.cutBox(b2,h)
+    c1 = entity2D()
+    c2 = entity2D()
+
+    c1.box,c2.box = crossMatrix(part1,part2,part3,part4)
 
     #Mutation
     if np.random.randint(100) <= 10:
-        rr = np.random.randint(2)
-        if rr == 0:
-            part1 = np.zeros(part1.shape,dtype= np.uint8)
-        else:
-            part2 = np.zeros(part1.shape,dtype= np.uint8)
-    
+        c2.solveFull(b2)
     if np.random.randint(100) <= 10:
-        rr = np.random.randint(2)
-        if rr == 0:
-            part3 = np.zeros(part1.shape, dtype=np.uint8)
-        else:
-            part4 = np.zeros(part1.shape, dtype=np.uint8)
+        c2.solveFull(b2)
 
 
-    c1 = entity2D()
-    c1.box = np.vstack([part1,part4])
-    c1.solveFull(b2)
     zeros = np.count_nonzero(c1.cntbxs==0)
     if zeros != 0:
         c1 = None
-    
-    c2 = entity2D()
-    c2.box = np.vstack([part3,part2])
-    c2.solveFull(b2)
-    zeros = np.count_nonzero(c2.cntbxs==0)
     if zeros != 0:
         c2 = None
-    
 
-    c3 = entity2D()
-    r1 = np.random.randint(1,5)
-    r2 = np.random.randint(1,5)
-    c3.box = eval("np.vstack([part%d,part%d])" % (r1,r2))
-    c3.solveFull(b2)
-    zeros = np.count_nonzero(c3.cntbxs==0)
-    if zeros != 0:
-        c3 = None
-    
-    return c1,c2,c3
+    return c1,c2
 
 
 def selection(pob,pond):
@@ -268,16 +244,13 @@ def selection(pob,pond):
         else:
             e2 = pob[idx]
             holding = False
-            e3,e4,e5 = crossParents(e1,e2)
+            e3,e4 = crossParents(e1,e2)
             if not e3 is None:
                 childs += 1
                 newpob.append(e3)
             if not e4 is None:
                 childs += 1
                 newpob.append(e4)
-            if not e5 is None:
-                childs += 1
-                newpob.append(e5)
     
     finalpob = list()
     for e in pob:

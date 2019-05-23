@@ -38,6 +38,8 @@ class entity2D:
         self.cntbxs = np.zeros(5,dtype=np.uint8)
         self.unfilled = 0
         self.box = np.zeros((self.l,self.w),dtype=np.uint8)
+        self.boxsmat = list()
+        self.boxcntr = 0
 
     #Coding:
         #0: unfilled
@@ -51,7 +53,7 @@ class entity2D:
                     idx,rndbox = bxs.getBox() #Get random box
                     if self.itBoxFit((l,w),rndbox): #If box can be set
                         #Fill with the box
-                        self.setBox((l,w),idx,rndbox)
+                        self.setBox((l,w),idx,rndbox,self.box)
 
         self.getFeatures()
         #self.printbox()
@@ -85,29 +87,53 @@ class entity2D:
                 #print (e)
                 self.cntbxs[e] += 1
 
-    def setBox(self,coords,idbox,box):
+    def setBox(self,coords,idbox,box,container):
+        boxfts = list()
+        boxcoords = np.empty((0,2),dtype=np.uint8)
         lo,wo = coords #origin coords
         for w in range(box[0]):
             for l in range(box[1]):
                 if w == 0 and l == 0:
-                    self.box[lo,wo] = idbox
+                    container[lo,wo] = idbox
+                    boxfts.append([self.boxcntr,idbox])
+                    #self.boxcntr += 1
+                    boxcoords = np.vstack([boxcoords,[lo,wo]])
                 else:
-                    self.box[lo+l,wo+w] = 1
-    
+                    container[lo+l,wo+w] = 1
+                    boxcoords = np.vstack([boxcoords,[lo+l,wo+w]])
+        boxfts.append(boxcoords)
+        #self.boxsmat.append(boxfts)
+        #print(boxfts)
+        #print(self.boxsmat)
+        #self.printbox()
+
     def delBox(self,coords,box):
         lo,wo = coords #origin coords
         for w in range(box[0]):
             for l in range(box[1]):
                 self.box[lo+l,wo+w] = 0
 
-    def cutBox(self,bxs):
+    def cutBox(self,bxs,height):
         boxpart = np.copy(self.box[:int(self.box.shape[0]/2),:])
-        for l in range(boxpart.shape[0]):
-            for w in range(boxpart.shape[1]):
-                if boxpart[l,w] >1:
-                    if self.itBoxCut((l,w),bxs.idxBox(boxpart[l,w]),boxpart):
-                        self.delBox((l,w),bxs.idxBox(boxpart[l,w]))
-        #self.printbox()
+        newbox1 = np.zeros(self.box.shape, dtype=np.uint8)
+        newbox2 = np.zeros(self.box.shape, dtype=np.uint8)
+        for l in range(self.box.shape[0]):
+            for w in range(self.box.shape[1]):
+                if self.box[l,w] >1:
+                    idd = self.box[l,w]
+                    if l<height:
+                        boxtofill = newbox1
+                    else:
+                        boxtofill = newbox2
+                    self.setBox([l,w],idd,bxs.idxBox(idd),boxtofill)
+
+        print(height,"\n",np.flip(newbox2,0))
+        print("\n\n",np.flip(newbox1,0))
+        print("\n\n",np.flip(newbox1+newbox2,0))
+        exit()
+
+
+        self.printbox()
         return np.copy(self.box[:int(self.box.shape[0]/2),:]), np.copy(self.box[int(self.box.shape[0]/2):,:])
 
     def itBoxCut(self,coords,box,boxpart):
@@ -125,11 +151,7 @@ class entity2D:
 
 
 b2 = boxes2D()
-b2.printbs()
 
-ent = entity2D()
-ent.solveFull(b2)
-A1,A2 = ent.cutBox(b2)
 
 
 
@@ -186,8 +208,9 @@ def rulet(pond):
 
 def crossParents(p1,p2):
     global b2 
-    part1,part2 = p1.cutBox(b2)
-    part3,part4 = p2.cutBox(b2)
+    h = np.random.randint(1,p1.box.shape[0])
+    part1,part2 = p1.cutBox(b2,h)
+    part3,part4 = p2.cutBox(b2,h)
 
     #Mutation
     if np.random.randint(100) <= 10:

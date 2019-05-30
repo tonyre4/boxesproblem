@@ -38,8 +38,6 @@ class entity2D:
         self.cntbxs = np.zeros(5,dtype=np.uint8)
         self.unfilled = 0
         self.box = np.zeros((self.l,self.w),dtype=np.uint8)
-        self.boxsmat = list()
-        self.boxcntr = 0
 
     #Coding:
         #0: unfilled
@@ -53,7 +51,7 @@ class entity2D:
                     idx,rndbox = bxs.getBox() #Get random box
                     if self.itBoxFit((l,w),rndbox): #If box can be set
                         #Fill with the box
-                        self.setBox((l,w),idx,rndbox,self.box)
+                        self.setBox((l,w),idx,rndbox)
 
         self.getFeatures()
         #self.printbox()
@@ -87,46 +85,30 @@ class entity2D:
                 #print (e)
                 self.cntbxs[e] += 1
 
-    def setBox(self,coords,idbox,box,container):
-        boxfts = list()
-        boxcoords = np.empty((0,2),dtype=np.uint8)
+    def setBox(self,coords,idbox,box):
         lo,wo = coords #origin coords
         for w in range(box[0]):
             for l in range(box[1]):
                 if w == 0 and l == 0:
-                    container[lo,wo] = idbox
-                    boxfts.append([self.boxcntr,idbox])
-                    #self.boxcntr += 1
-                    boxcoords = np.vstack([boxcoords,[lo,wo]])
+                    self.box[lo,wo] = idbox
                 else:
-                    container[lo+l,wo+w] = 1
-                    boxcoords = np.vstack([boxcoords,[lo+l,wo+w]])
-        boxfts.append(boxcoords)
-        #self.boxsmat.append(boxfts)
-        #print(boxfts)
-        #print(self.boxsmat)
-        #self.printbox()
-
+                    self.box[lo+l,wo+w] = 1
+    
     def delBox(self,coords,box):
         lo,wo = coords #origin coords
         for w in range(box[0]):
             for l in range(box[1]):
                 self.box[lo+l,wo+w] = 0
 
-    def cutBox(self,bxs,height):
+    def cutBox(self,bxs):
         boxpart = np.copy(self.box[:int(self.box.shape[0]/2),:])
-        newbox1 = np.zeros(self.box.shape, dtype=np.uint8)
-        newbox2 = np.zeros(self.box.shape, dtype=np.uint8)
-        for l in range(self.box.shape[0]):
-            for w in range(self.box.shape[1]):
-                if self.box[l,w] >1:
-                    idd = self.box[l,w]
-                    if l<height:
-                        boxtofill = newbox1
-                    else:
-                        boxtofill = newbox2
-                    self.setBox([l,w],idd,bxs.idxBox(idd),boxtofill)
-        return newbox1,newbox2
+        for l in range(boxpart.shape[0]):
+            for w in range(boxpart.shape[1]):
+                if boxpart[l,w] >1:
+                    if self.itBoxCut((l,w),bxs.idxBox(boxpart[l,w]),boxpart):
+                        self.delBox((l,w),bxs.idxBox(boxpart[l,w]))
+        #self.printbox()
+        return np.copy(self.box[:int(self.box.shape[0]/2),:]), np.copy(self.box[int(self.box.shape[0]/2):,:])
 
     def itBoxCut(self,coords,box,boxpart):
         lo,wo = coords #origin coords
@@ -143,7 +125,11 @@ class entity2D:
 
 
 b2 = boxes2D()
+b2.printbs()
 
+ent = entity2D()
+ent.solveFull(b2)
+A1,A2 = ent.cutBox(b2)
 
 
 
@@ -198,37 +184,52 @@ def rulet(pond):
         #print("idx:",idx)
     return idx
 
-def crossMatrix(p1,p2,p3,p4):
-    newmat1 = p1
-    newmat2 = p3
-
-    return newmat1,newmat2
-
-
 def crossParents(p1,p2):
     global b2 
-    h = np.random.randint(1,p1.box.shape[0])
-    part1,part2 = p1.cutBox(b2,h)
-    part3,part4 = p2.cutBox(b2,h)
-    c1 = entity2D()
-    c2 = entity2D()
-
-    c1.box,c2.box = crossMatrix(part1,part2,part3,part4)
+    part1,part2 = p1.cutBox(b2)
+    part3,part4 = p2.cutBox(b2)
 
     #Mutation
     if np.random.randint(100) <= 10:
-        c2.solveFull(b2)
+        rr = np.random.randint(2)
+        if rr == 0:
+            part1 = np.zeros(part1.shape,dtype= np.uint8)
+        else:
+            part2 = np.zeros(part1.shape,dtype= np.uint8)
+    
     if np.random.randint(100) <= 10:
-        c2.solveFull(b2)
+        rr = np.random.randint(2)
+        if rr == 0:
+            part3 = np.zeros(part1.shape, dtype=np.uint8)
+        else:
+            part4 = np.zeros(part1.shape, dtype=np.uint8)
 
 
+    c1 = entity2D()
+    c1.box = np.vstack([part1,part4])
+    c1.solveFull(b2)
     zeros = np.count_nonzero(c1.cntbxs==0)
     if zeros != 0:
         c1 = None
+    
+    c2 = entity2D()
+    c2.box = np.vstack([part3,part2])
+    c2.solveFull(b2)
+    zeros = np.count_nonzero(c2.cntbxs==0)
     if zeros != 0:
         c2 = None
+    
 
-    return c1,c2
+    c3 = entity2D()
+    r1 = np.random.randint(1,5)
+    r2 = np.random.randint(1,5)
+    c3.box = eval("np.vstack([part%d,part%d])" % (r1,r2))
+    c3.solveFull(b2)
+    zeros = np.count_nonzero(c3.cntbxs==0)
+    if zeros != 0:
+        c3 = None
+    
+    return c1,c2,c3
 
 
 def selection(pob,pond):
@@ -244,13 +245,16 @@ def selection(pob,pond):
         else:
             e2 = pob[idx]
             holding = False
-            e3,e4 = crossParents(e1,e2)
+            e3,e4,e5 = crossParents(e1,e2)
             if not e3 is None:
                 childs += 1
                 newpob.append(e3)
             if not e4 is None:
                 childs += 1
                 newpob.append(e4)
+            if not e5 is None:
+                childs += 1
+                newpob.append(e5)
     
     finalpob = list()
     for e in pob:

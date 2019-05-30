@@ -6,7 +6,7 @@
     #3: 2x3x1
     #4: 5x4x2
     #5: 5x1x2
-
+import matplotlib.pyplot as plt
 import numpy as np
 
 class boxes2D:
@@ -149,7 +149,6 @@ def getPobIni(npob):
         pob.append(e)
     return pob
 
-pob = getPobIni(100)
 
 def getFit(pob):
     zs = list()
@@ -255,7 +254,7 @@ def selection(pob,pond):
             if not e5 is None:
                 childs += 1
                 newpob.append(e5)
-    
+
     finalpob = list()
     for e in pob:
         finalpob.append(e)
@@ -293,26 +292,42 @@ def elits(pob,pond,n):
 
     return newpob2,best
 
+npoblators = 200
+pob = getPobIni(npoblators)
 geners = 300
 bests = list()
+histo = np.empty((0,1))
+plt.grid(True)
+plt.title('Box problem')
+plt.xlabel('Generations', fontsize=16)
+plt.ylabel('Unfilled spaces', fontsize=16)
+
 for g in range(geners):
+    print("Gene: ",g)
     np.random.seed()
     #Evaluation
+    print("Evaluating...")
     ev = getFit(pob)
     pond = getPond(ev)
     #Selection
+    print("Making childs...")
     pob = selection(pob,pond)
     #Evaluation
+    print("Evaluating...")
     ev = getFit(pob)
     pond = getPond(ev)
     #print(len(pob))
     #Elitism
-    pob,best = elits(pob,pond,100)
-    print("Gene: ",g)
+    print("Elits...")
+    pob,best = elits(pob,pond,npoblators)
     print(best.unfilled, best.cntbxs)
+    histo = np.vstack([histo,best.unfilled])
+    plt.scatter(g, histo[-1],c='blue')
+    plt.pause(0.0000001)
     bests.append(best)
 
 best.printbox()
+plt.show()
 
 
 

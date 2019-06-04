@@ -85,14 +85,31 @@ class entity2D:
                 #print (e)
                 self.cntbxs[e] += 1
 
-    def setBox(self,coords,idbox,box):
+    def mergeBoxes(self,bx1,bx2,bxs):
+        self.box = bx1 #Setting first part of cutted box
+        #print(np.flip(bx2,0),"\n")
+        #print(np.flip(bx1,0),"\n")
+
+        for l in range(self.box.shape[0]):
+            for w in range(self.box.shape[1]):
+                if self.box[l,w] == 0 and bx2[l,w]>1:
+                    idbox = bx2[l,w]
+                    if self.itBoxFit((l,w),bxs.idxBox(idbox)):
+                        self.setBox((l,w),idbox,bxs.idxBox(idbox))
+        #self.printbox()
+        #exit()
+        self.getFeatures()
+
+    def setBox(self,coords,idbox,box,container=None):
+        if container is None:
+            container = self.box
         lo,wo = coords #origin coords
         for w in range(box[0]):
             for l in range(box[1]):
                 if w == 0 and l == 0:
-                    self.box[lo,wo] = idbox
+                    container[lo,wo] = idbox
                 else:
-                    self.box[lo+l,wo+w] = 1
+                    container[lo+l,wo+w] = 1
     
     def delBox(self,coords,box):
         lo,wo = coords #origin coords
@@ -100,15 +117,21 @@ class entity2D:
             for l in range(box[1]):
                 self.box[lo+l,wo+w] = 0
 
-    def cutBox(self,bxs):
-        boxpart = np.copy(self.box[:int(self.box.shape[0]/2),:])
-        for l in range(boxpart.shape[0]):
-            for w in range(boxpart.shape[1]):
-                if boxpart[l,w] >1:
-                    if self.itBoxCut((l,w),bxs.idxBox(boxpart[l,w]),boxpart):
-                        self.delBox((l,w),bxs.idxBox(boxpart[l,w]))
-        #self.printbox()
-        return np.copy(self.box[:int(self.box.shape[0]/2),:]), np.copy(self.box[int(self.box.shape[0]/2):,:])
+    def cutBox(self,cut,bxs):
+        p1 = np.zeros(self.box.shape)
+        p2 = np.zeros(self.box.shape)
+
+        for l in range(self.box.shape[0]):
+            for w in range(self.box.shape[1]):
+                idbox = self.box[l,w]
+                if idbox >1:
+                    if l<=cut:
+                        self.setBox((l,w),idbox,bxs.idxBox(idbox),container=p1)
+                    else:
+                        self.setBox((l,w),idbox,bxs.idxBox(idbox),container=p2)
+        p1 = p1.astype(np.uint8)
+        p2 = p2.astype(np.uint8)
+        return p1,p2
 
     def itBoxCut(self,coords,box,boxpart):
         lo,wo = coords #origin coords
@@ -124,12 +147,6 @@ class entity2D:
         return False
 
 
-b2 = boxes2D()
-b2.printbs()
-
-ent = entity2D()
-ent.solveFull(b2)
-A1,A2 = ent.cutBox(b2)
 
 
 
@@ -183,60 +200,76 @@ def rulet(pond):
         #print("idx:",idx)
     return idx
 
-def crossParents(p1,p2):
+def mutation(c,mutRate,b2):
+    if np.random.randint(0,100) <= mutRate:
+        cntr = 0
+        p = False
+        while True:
+            if cntr<50:
+                #if p:
+                #print(cntr)
+                current = np.copy(c.box)
+                c.solveFull(b2)
+                if np.any(current != c.box):
+                    #print(np.flip(current,0),"\n")
+                    #c1.printbox()
+                    #exit()
+                    #print("Child mutated!")
+                    break
+                cntr += 1
+            else:
+                #print("Deleting Boxes")
+                #c.printbox()
+                #print("Stuck Child :/")
+                bxtodel = np.random.randint(1,10)
+                #print("deleting %d boxes from child from random locations" % (bxtodel))
+                for i in range(bxtodel):
+                    while True:
+                        l = np.random.randint(0,c.box.shape[0])
+                        w = np.random.randint(0,c.box.shape[1])
+                        if c.box[l,w]>1:
+                            c.delBox((l,w),b2.idxBox(c.box[l,w]))
+                            cntr = 0
+                            p = True
+                            break
+                #print("\n")
+                #c.printbox()
+                #exit()
+
+def crossParents(p1,p2,mutRate):
     global b2 
-    part1,part2 = p1.cutBox(b2)
-    part3,part4 = p2.cutBox(b2)
 
-    #Mutation
-    if np.random.randint(100) <= 10:
-        rr = np.random.randint(2)
-        if rr == 0:
-            part1 = np.zeros(part1.shape,dtype= np.uint8)
-        else:
-            part2 = np.zeros(part1.shape,dtype= np.uint8)
-    
-    if np.random.randint(100) <= 10:
-        rr = np.random.randint(2)
-        if rr == 0:
-            part3 = np.zeros(part1.shape, dtype=np.uint8)
-        else:
-            part4 = np.zeros(part1.shape, dtype=np.uint8)
-
+    cut = np.random.randint(1,p1.box.shape[0]-2)
+    part1,part2 = p1.cutBox(cut,b2)
+    part3,part4 = p2.cutBox(cut,b2)
 
     c1 = entity2D()
-    c1.box = np.vstack([part1,part4])
-    c1.solveFull(b2)
+    c1.mergeBoxes(part1,part4,b2)
+    c2 = entity2D()
+    c2.mergeBoxes(part3,part2,b2)
+
+    #Mutation
+    mutation(c1,mutRate,b2)
+    mutation(c2,mutRate,b2)
+    
+
     zeros = np.count_nonzero(c1.cntbxs==0)
     if zeros != 0:
         c1 = None
-    
-    c2 = entity2D()
-    c2.box = np.vstack([part3,part2])
-    c2.solveFull(b2)
+
     zeros = np.count_nonzero(c2.cntbxs==0)
     if zeros != 0:
         c2 = None
-    
 
-    c3 = entity2D()
-    r1 = np.random.randint(1,5)
-    r2 = np.random.randint(1,5)
-    c3.box = eval("np.vstack([part%d,part%d])" % (r1,r2))
-    c3.solveFull(b2)
-    zeros = np.count_nonzero(c3.cntbxs==0)
-    if zeros != 0:
-        c3 = None
-    
-    return c1,c2,c3
+    return c1,c2
 
 
-def selection(pob,pond):
+def selection(nchilds,pob,pond):
     childs = 0
     newpob = list()
     holding = False
 
-    while childs<100:
+    while childs<nchilds:
         idx = rulet(pond)
         if not holding:
             e1 = pob[idx]
@@ -244,16 +277,13 @@ def selection(pob,pond):
         else:
             e2 = pob[idx]
             holding = False
-            e3,e4,e5 = crossParents(e1,e2)
+            e3,e4 = crossParents(e1,e2,10)
             if not e3 is None:
                 childs += 1
                 newpob.append(e3)
             if not e4 is None:
                 childs += 1
                 newpob.append(e4)
-            if not e5 is None:
-                childs += 1
-                newpob.append(e5)
 
     finalpob = list()
     for e in pob:
@@ -292,9 +322,11 @@ def elits(pob,pond,n):
 
     return newpob2,best
 
-npoblators = 200
+b2 = boxes2D() #Boxes object
+npoblators = 300
+newchildsn = 400
 pob = getPobIni(npoblators)
-geners = 300
+geners = 1500
 bests = list()
 histo = np.empty((0,1))
 plt.grid(True)
@@ -306,19 +338,19 @@ for g in range(geners):
     print("Gene: ",g)
     np.random.seed()
     #Evaluation
-    print("Evaluating...")
+    #print("Evaluating...")
     ev = getFit(pob)
     pond = getPond(ev)
     #Selection
-    print("Making childs...")
-    pob = selection(pob,pond)
+    #print("Making childs...")
+    pob = selection(newchildsn,pob,pond)
     #Evaluation
-    print("Evaluating...")
+    #print("Evaluating...")
     ev = getFit(pob)
     pond = getPond(ev)
     #print(len(pob))
     #Elitism
-    print("Elits...")
+    #print("Elits...")
     pob,best = elits(pob,pond,npoblators)
     print(best.unfilled, best.cntbxs)
     histo = np.vstack([histo,best.unfilled])
